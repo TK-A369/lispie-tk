@@ -24,6 +24,11 @@ pub fn main() !void {
     const code = "(print (add 3 4))";
     const tokens = try lexer.tokenize(code, allocator);
     defer tokens.deinit();
+    defer {
+        for (tokens.items) |*tok| {
+            tok.deinit();
+        }
+    }
     try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
 
     for (tokens.items) |tok| {

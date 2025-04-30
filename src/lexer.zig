@@ -26,6 +26,18 @@ pub const Token = union(enum) {
     number_literal: f64,
     string_literal: std.ArrayList(u8),
 
+    pub fn deinit(self: *Token) void {
+        switch (self.*) {
+            .symbol => |*sym| {
+                sym.deinit();
+            },
+            .string_literal => |*str| {
+                str.deinit();
+            },
+            else => {}
+        }
+    }
+
     pub fn toString(self: *const Token, allocator: std.mem.Allocator) !std.ArrayList(u8) {
         var result = std.ArrayList(u8).init(allocator);
         const result_writer = result.writer();
@@ -126,6 +138,7 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
             }
 
             var integer_part = std.ArrayList(u8).init(allocator);
+            defer integer_part.deinit();
             while (std.ascii.isDigit(code[curr_idx])) {
                 try integer_part.append(code[curr_idx]);
                 curr_idx += 1;
@@ -136,9 +149,11 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
                 num_value += std.math.pow(f64, 10.0, @as(f64, @floatFromInt(@as(i32, @intCast(integer_part.items.len - i)) - 1))) * @as(f64, @floatFromInt(digit - '0'));
             }
 
-            var fraction_part = std.ArrayList(u8).init(allocator);
             if (code[curr_idx] == '.') {
                 curr_idx += 1;
+
+                var fraction_part = std.ArrayList(u8).init(allocator);
+                defer fraction_part.deinit();
 
                 while (std.ascii.isDigit(code[curr_idx])) {
                     try fraction_part.append(code[curr_idx]);
