@@ -17,16 +17,17 @@ pub fn main() !void {
 
     try stdout.print("Run `zig build test` to run the tests.\n", .{});
 
-    var da = std.heap.DebugAllocator(.{}){};
+    var da = std.heap.DebugAllocator(.{}).init;
     const allocator = da.allocator();
     defer _ = da.deinit();
 
     const code = "(print (+ 3 4))";
     const tokens = try lexer.tokenize(code, allocator);
     defer tokens.deinit();
+    try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
 
     for (tokens.items) |tok| {
-        try stdout.print("Token", .{});
+        try stdout.print("Token\n", .{});
         _ = tok;
     }
 
