@@ -2,6 +2,8 @@
 //! you are building an executable. If you are making a library, the convention
 //! is to delete this file and start with root.zig instead.
 
+const lexer = @import("lexer.zig");
+
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
     std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
@@ -14,6 +16,19 @@ pub fn main() !void {
     const stdout = bw.writer();
 
     try stdout.print("Run `zig build test` to run the tests.\n", .{});
+
+    var da = std.heap.DebugAllocator(.{}){};
+    const allocator = da.allocator();
+    defer _ = da.deinit();
+
+    const code = "(print (+ 3 4))";
+    const tokens = try lexer.tokenize(code, allocator);
+    defer tokens.deinit();
+
+    for (tokens.items) |tok| {
+        try stdout.print("Token", .{});
+        _ = tok;
+    }
 
     try bw.flush(); // Don't forget to flush!
 }

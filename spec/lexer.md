@@ -4,7 +4,7 @@ Token types:
 
 1. Parenthesis
 
-  - type: normal `()`
+  - type: normal `()`, square `[]`
   - prefix: none, quote `'`, quasiquote `\``, unquote `,`, macro expansion `!`
   - handedness: left `(`, right `)`
 
