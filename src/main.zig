@@ -27,8 +27,9 @@ pub fn main() !void {
     try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
 
     for (tokens.items) |tok| {
-        try stdout.print("Token\n", .{});
-        _ = tok;
+        var token_str = try tok.toString(allocator);
+        defer token_str.deinit();
+        try stdout.print("Token: {s}\n", .{token_str.items});
     }
 
     try bw.flush(); // Don't forget to flush!
