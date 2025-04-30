@@ -21,7 +21,7 @@ pub fn main() !void {
     const allocator = da.allocator();
     defer _ = da.deinit();
 
-    const code = "(print (+ 3 4))";
+    const code = "(print (add 3 4))";
     const tokens = try lexer.tokenize(code, allocator);
     defer tokens.deinit();
     try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
