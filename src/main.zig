@@ -3,6 +3,7 @@
 //! is to delete this file and start with root.zig instead.
 
 const lexer = @import("lexer.zig");
+const parser = @import("parser.zig");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
@@ -41,6 +42,9 @@ pub fn main() !void {
         defer token_str.deinit();
         try stdout.print("Token: {s}\n", .{token_str.items});
     }
+
+    var parse_result = try parser.parse(tokens.items, allocator);
+    defer parse_result.deinit();
 
     try bw.flush(); // Don't forget to flush!
 }

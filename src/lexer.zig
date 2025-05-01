@@ -1,12 +1,12 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 
-const ParenthesisType = enum {
+pub const ParenthesisType = enum {
     normal,
     square,
 };
 
-const ParenthesisPrefix = enum {
+pub const ParenthesisPrefix = enum {
     none,
     quote,
     quasiquote,
