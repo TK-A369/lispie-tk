@@ -41,6 +41,13 @@ pub const LispieValue = union(enum) {
                     _ = i;
                     try result_writer.writeAll("  ");
                 }
+                switch (list.prefix) {
+                    .none => try result_writer.writeAll(""),
+                    .quote => try result_writer.writeAll("\'"),
+                    .quasiquote => try result_writer.writeAll("`"),
+                    .unquote => try result_writer.writeAll(","),
+                    .macro_expansion => try result_writer.writeAll("!"),
+                }
                 switch (list.par_type) {
                     .normal => try result_writer.writeAll("(\n"),
                     .square => try result_writer.writeAll("[\n"),
@@ -125,12 +132,15 @@ pub fn parse(tokens: []const lexer.Token, allocator: std.mem.Allocator) !ParseRe
         .number_literal => |*num_lit| {
             return .{ .val = .{ .number = num_lit.* }, .len = 1 };
         },
-        .string_literal => {
-            const str_contents = std.ArrayList(LispieValue).init(allocator);
+        .string_literal => |*str_lit| {
+            var str_contents = std.ArrayList(LispieValue).init(allocator);
+            for (str_lit.items) |ch| {
+                try str_contents.append(.{ .number = @floatFromInt(ch) });
+            }
             return .{
                 .val = .{ .list = .{
                     .par_type = .normal,
-                    .prefix = .none,
+                    .prefix = .quote,
                     .contents = str_contents,
                 } },
                 .len = 1,

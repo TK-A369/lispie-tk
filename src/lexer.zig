@@ -172,6 +172,30 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
             try result_tokens.append(.{
                 .number_literal = num_value,
             });
+        } else if (code[curr_idx] == '\"') {
+            //String literals
+            var str_content = std.ArrayList(u8).init(allocator);
+            curr_idx += 1;
+            while (code[curr_idx] != '\"') {
+                if (code[curr_idx] == '\\') {
+                    switch (code[curr_idx + 1]) {
+                        'n' => {
+                            try str_content.append('\n');
+                        },
+                        '\"' => {
+                            try str_content.append('\"');
+                        },
+                        else => {}
+                    }
+                    curr_idx += 2;
+                } else {
+                    try str_content.append(code[curr_idx]);
+                    curr_idx += 1;
+                }
+            }
+            curr_idx += 1;
+
+            try result_tokens.append(.{ .string_literal = str_content });
         }
     }
 

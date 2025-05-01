@@ -23,9 +23,11 @@ pub fn main() !void {
     defer _ = da.deinit();
 
     const code =
-        \\(print (add
-        \\ 3
-        \\ 4))
+        \\(print
+        \\  "3 + 4 = "
+        \\  (add
+        \\    3
+        \\    4))
     ;
     try stdout.print("Code:\n\"\"\"\n{s}\n\"\"\"\n", .{code});
     const tokens = try lexer.tokenize(code, allocator);
