@@ -8,6 +8,9 @@ pub const LispieList = struct {
     contents: std.ArrayList(LispieValue),
 
     pub fn deinit(self: *LispieList) void {
+        for (self.contents.items) |*child| {
+            child.deinit();
+        }
         self.contents.deinit();
     }
 };
