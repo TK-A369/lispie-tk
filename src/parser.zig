@@ -31,6 +31,55 @@ pub const LispieValue = union(enum) {
             else => {},
         }
     }
+
+    pub fn toString(self: *const LispieValue, depth: u32, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+        var result = std.ArrayList(u8).init(allocator);
+        const result_writer = result.writer();
+        switch (self.*) {
+            .list => |*list| {
+                for (0..depth) |i| {
+                    _ = i;
+                    try result_writer.writeAll("  ");
+                }
+                switch (list.par_type) {
+                    .normal => try result_writer.writeAll("(\n"),
+                    .square => try result_writer.writeAll("[\n"),
+                }
+
+                for (list.contents.items) |child| {
+                    var child_str = try child.toString(depth + 1, allocator);
+                    defer child_str.deinit();
+
+                    try std.fmt.format(result_writer, "{s}\n", .{child_str.items});
+                }
+
+                for (0..depth) |i| {
+                    _ = i;
+                    try result_writer.writeAll("  ");
+                }
+                switch (list.par_type) {
+                    .normal => try result_writer.writeAll(")"),
+                    .square => try result_writer.writeAll("]"),
+                }
+            },
+            .symbol => |*sym| {
+                for (0..depth) |i| {
+                    _ = i;
+                    try result_writer.writeAll("  ");
+                }
+                try std.fmt.format(result_writer, "{s}", .{sym.items});
+            },
+            .number => |*num| {
+                for (0..depth) |i| {
+                    _ = i;
+                    try result_writer.writeAll("  ");
+                }
+                try std.fmt.format(result_writer, "{d}", .{num.*});
+            },
+        }
+
+        return result;
+    }
 };
 
 pub const ParseResult = struct {
