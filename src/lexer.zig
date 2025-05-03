@@ -79,7 +79,7 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
 
     var curr_idx: u32 = 0;
     while (curr_idx < code.len) {
-        std.debug.print("curr_idx = {d}\n", .{curr_idx});
+        // std.debug.print("curr_idx = {d}\n", .{curr_idx});
 
         if (std.ascii.isWhitespace(code[curr_idx])) {
             curr_idx += 1;
