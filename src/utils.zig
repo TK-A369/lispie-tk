@@ -8,3 +8,60 @@ pub fn isValueInArray(comptime T: type, array: []const T, value: T) bool {
     }
     return false;
 }
+
+pub fn RefCount(comptime T: type) type {
+    return struct {
+        const Atomic = std.atomic.Value(usize);
+        const This = @This();
+
+        count: *Atomic,
+        value: *T,
+        allocator: std.mem.Allocator,
+
+        pub fn init(value: *T, allocator: std.mem.Allocator) !This {
+            const count = try allocator.create(Atomic);
+            count.* = .init(1);
+            return .{
+                .count = count,
+                .value = value,
+                .allocator = allocator,
+            };
+        }
+
+        pub fn clone(self: *This) This {
+            _ = self.count.fetchAdd(1, .monotonic);
+            return .{
+                .count = self.count,
+                .value = self.value,
+                .allocator = self.allocator,
+            };
+        }
+
+        pub fn unref(self: *This) void {
+            if (self.count.fetchSub(1, .release) == 1) {
+                std.debug.print("Destroying {d}\n", .{self.value});
+
+                _ = self.count.load(.acquire);
+
+                self.allocator.destroy(self.count);
+                self.allocator.destroy(self.value);
+            }
+        }
+    };
+}
+
+test "RefCount" {
+    var allocator = std.testing.allocator;
+
+    const my_value = try allocator.create(i8);
+    my_value.* = 7;
+
+    var rc = try RefCount(i8).init(my_value, allocator);
+    var rc2 = rc.clone();
+
+    rc.value.* = 3;
+    rc.unref();
+
+    try std.testing.expectEqual(3, rc2.value.*);
+    rc2.unref();
+}

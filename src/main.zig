@@ -2,6 +2,7 @@ const std = @import("std");
 
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
+const utils = @import("utils.zig");
 
 pub fn main() !void {
     const stdout_file = std.io.getStdOut().writer();
@@ -43,4 +44,8 @@ pub fn main() !void {
     try stdout.print("Parse result:\n{s}\n", .{parse_result_str.items});
 
     try bw.flush(); // Don't forget to flush!
+}
+
+comptime {
+    _ = utils;
 }
