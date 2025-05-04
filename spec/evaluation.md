@@ -12,7 +12,7 @@
 
 In this stage, every `defmacro` special form will create a macro definition.
 
-It looks like this: `(defmacro <args> <body>)`, where `<args>` may be either a symbol - then the arguments list will be bound to a variable with such name - or a list of symbols - then individual arguments will be bound to respective variables. `<body>` will be evaluated every time the macro is expanded.
+It looks like this: `(defmacro <name> <args> <body>)`, where `<name>` should be a sumbol - macro's name. `<args>` may be either a symbol - then the arguments list will be bound to a variable with such name - or a list of symbols - then individual arguments will be bound to respective variables. `<body>` will be evaluated every time the macro is expanded.
 
 During this stage, `importmacros` special forms will result in given file being evaluated (read macros and evaluate macros stages only) and macros exported by it will be available in the current module.
 
