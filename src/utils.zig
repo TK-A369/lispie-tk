@@ -39,7 +39,8 @@ pub fn RefCount(comptime T: type) type {
 
         pub fn unref(self: *This) void {
             if (self.count.fetchSub(1, .release) == 1) {
-                std.debug.print("Destroying {d}\n", .{self.value});
+                // std.debug.print("Destroying {d}\n", .{self.value});
+                std.debug.print("Destroying RefCount\n", .{});
 
                 _ = self.count.load(.acquire);
 
@@ -50,7 +51,21 @@ pub fn RefCount(comptime T: type) type {
     };
 }
 
-test "RefCount" {
+test "RefCount 1" {
+    var allocator = std.testing.allocator;
+
+    const my_value = try allocator.create(i8);
+    my_value.* = 7;
+
+    var rc = try RefCount(i8).init(my_value, allocator);
+
+    rc.value.* = 3;
+
+    try std.testing.expectEqual(3, rc.value.*);
+    rc.unref();
+}
+
+test "RefCount 2" {
     var allocator = std.testing.allocator;
 
     const my_value = try allocator.create(i8);

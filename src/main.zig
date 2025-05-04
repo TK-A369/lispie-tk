@@ -39,7 +39,7 @@ pub fn main() !void {
     var parse_result = try parser.parse(tokens.items, allocator);
     defer parse_result.deinit();
 
-    var parse_result_str = try parse_result.val.toString(0, allocator);
+    var parse_result_str = try parse_result.val.value.toString(0, allocator);
     defer parse_result_str.deinit();
     try stdout.print("Parse result:\n{s}\n", .{parse_result_str.items});
 

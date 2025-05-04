@@ -1,15 +1,16 @@
 const std = @import("std");
 
+const utils = @import("utils.zig");
 const lexer = @import("lexer.zig");
 
 pub const LispieList = struct {
     par_type: lexer.ParenthesisType,
     prefix: lexer.ParenthesisPrefix,
-    contents: std.ArrayList(LispieValue),
+    contents: std.ArrayList(utils.RefCount(LispieValue)),
 
     pub fn deinit(self: *LispieList) void {
         for (self.contents.items) |*child| {
-            child.deinit();
+            child.unref();
         }
         self.contents.deinit();
     }
@@ -54,7 +55,7 @@ pub const LispieValue = union(enum) {
                 }
 
                 for (list.contents.items) |child| {
-                    var child_str = try child.toString(depth + 1, allocator);
+                    var child_str = try child.value.toString(depth + 1, allocator);
                     defer child_str.deinit();
 
                     try std.fmt.format(result_writer, "{s}\n", .{child_str.items});
@@ -90,35 +91,41 @@ pub const LispieValue = union(enum) {
 };
 
 pub const ParseResult = struct {
-    val: LispieValue,
+    val: utils.RefCount(LispieValue),
     len: usize,
 
     pub fn deinit(self: *ParseResult) void {
-        self.val.deinit();
+        self.val.unref();
     }
 };
 
 pub fn parse(tokens: []const lexer.Token, allocator: std.mem.Allocator) !ParseResult {
     switch (tokens[0]) {
         .parenthesis => |*par| {
-            var children = std.ArrayList(LispieValue).init(allocator);
+            var children = std.ArrayList(utils.RefCount(LispieValue)).init(allocator);
 
             var curr_idx: usize = 1;
             while (switch (tokens[curr_idx]) {
                 .parenthesis => |*par_next| !par_next.is_right,
                 else => true
             }) {
-                const child_result = try parse(tokens[curr_idx..], allocator);
-                try children.append(child_result.val);
+                var child_result = try parse(tokens[curr_idx..], allocator);
+                defer child_result.deinit();
+
+                try children.append(child_result.val.clone());
                 curr_idx += child_result.len;
             }
 
+            const list_value_ptr = try allocator.create(LispieValue);
+            list_value_ptr.* = .{ .list = .{
+                .par_type = par.par_type,
+                .prefix = par.prefix,
+                .contents = children,
+            } };
+            const list_value_rc = try utils.RefCount(LispieValue).init(list_value_ptr, allocator);
+
             return .{
-                .val = .{ .list = .{
-                    .par_type = par.par_type,
-                    .prefix = par.prefix,
-                    .contents = children,
-                } },
+                .val = list_value_rc,
                 .len = curr_idx + 1,
             };
         },
@@ -127,22 +134,46 @@ pub fn parse(tokens: []const lexer.Token, allocator: std.mem.Allocator) !ParseRe
             // We also don't use clone methods because we might use different allocators
             var symbol_str = std.ArrayList(u8).init(allocator);
             try symbol_str.appendSlice(sym.items);
-            return .{ .val = .{ .symbol = symbol_str }, .len = 1 };
+
+            const sym_value_ptr = try allocator.create(LispieValue);
+            sym_value_ptr.* = .{ .symbol = symbol_str };
+            const sym_value_rc = try utils.RefCount(LispieValue).init(sym_value_ptr, allocator);
+
+            return .{
+                .val = sym_value_rc,
+                .len = 1,
+            };
         },
         .number_literal => |*num_lit| {
-            return .{ .val = .{ .number = num_lit.* }, .len = 1 };
+            const num_value_ptr = try allocator.create(LispieValue);
+            num_value_ptr.* = .{ .number = num_lit.* };
+            const num_value_rc = try utils.RefCount(LispieValue).init(num_value_ptr, allocator);
+
+            return .{
+                .val = num_value_rc,
+                .len = 1,
+            };
         },
         .string_literal => |*str_lit| {
-            var str_contents = std.ArrayList(LispieValue).init(allocator);
+            var str_contents = std.ArrayList(utils.RefCount(LispieValue)).init(allocator);
             for (str_lit.items) |ch| {
-                try str_contents.append(.{ .number = @floatFromInt(ch) });
+                const char_value_ptr = try allocator.create(LispieValue);
+                char_value_ptr.* = .{ .number = @floatFromInt(ch) };
+                const char_value_rc = try utils.RefCount(LispieValue).init(char_value_ptr, allocator);
+
+                try str_contents.append(char_value_rc);
             }
+
+            const str_value_ptr = try allocator.create(LispieValue);
+            str_value_ptr.* = .{ .list = .{
+                .par_type = .normal,
+                .prefix = .quote,
+                .contents = str_contents,
+            } };
+            const str_value_rc = try utils.RefCount(LispieValue).init(str_value_ptr, allocator);
+
             return .{
-                .val = .{ .list = .{
-                    .par_type = .normal,
-                    .prefix = .quote,
-                    .contents = str_contents,
-                } },
+                .val = str_value_rc,
                 .len = 1,
             };
         },
