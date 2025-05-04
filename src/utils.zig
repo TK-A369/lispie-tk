@@ -39,10 +39,15 @@ pub fn RefCount(comptime T: type) type {
 
         pub fn unref(self: *This) void {
             if (self.count.fetchSub(1, .release) == 1) {
-                // std.debug.print("Destroying {d}\n", .{self.value});
-                std.debug.print("Destroying RefCount\n", .{});
-
                 _ = self.count.load(.acquire);
+
+                if (std.meta.hasMethod(T, "deinit")) {
+                    self.value.deinit();
+                    std.debug.print("Deiniting value inside RefCount\n", .{});
+                }
+
+                std.debug.print("Destroying {*}\n", .{self.value});
+                // std.debug.print("Destroying RefCount\n", .{});
 
                 self.allocator.destroy(self.count);
                 self.allocator.destroy(self.value);
