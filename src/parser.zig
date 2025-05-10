@@ -84,6 +84,14 @@ pub const LispieValue = union(enum) {
                     _ = i;
                     try result_writer.writeAll("  ");
                 }
+                switch (sym.prefix) {
+                    .none => try result_writer.writeAll(""),
+                    .quote => try result_writer.writeAll("\'"),
+                    .quasiquote => try result_writer.writeAll("`"),
+                    .unquote => try result_writer.writeAll(","),
+                    .macro_expansion => try result_writer.writeAll("!"),
+                }
+
                 try std.fmt.format(result_writer, "{s}", .{sym.contents.items});
             },
             .number => |*num| {

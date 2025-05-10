@@ -87,32 +87,36 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
     var result_tokens: std.ArrayList(Token) = .init(allocator);
 
     var curr_idx: u32 = 0;
+    var prev_prefix_char: u8 = 0;
     while (curr_idx < code.len) {
         // std.debug.print("curr_idx = {d}\n", .{curr_idx});
 
         if (std.ascii.isWhitespace(code[curr_idx])) {
             curr_idx += 1;
-        } else if (utils.isValueInArray(u8, &[_]u8{ '(', ')', '[', ']', '\'', '`', ',', '!' }, code[curr_idx])) {
+        } else if (utils.isValueInArray(u8, &[_]u8{ '\'', '`', ',', '!' }, code[curr_idx])) {
+            prev_prefix_char = code[curr_idx];
+            curr_idx += 1;
+        } else if (utils.isValueInArray(u8, &[_]u8{ '(', ')', '[', ']' }, code[curr_idx])) {
             // Parentheses
             var prefix: ParenthesisPrefix = .none;
-            if (utils.isValueInArray(u8, &[_]u8{ '\'', '`', ',', '!' }, code[curr_idx]) and curr_idx < code.len - 1) {
-                switch (code[curr_idx]) {
-                    '\'' => {
-                        prefix = .quote;
-                    },
-                    '`' => {
-                        prefix = .quasiquote;
-                    },
-                    ',' => {
-                        prefix = .unquote;
-                    },
-                    '!' => {
-                        prefix = .macro_expansion;
-                    },
-                    else => {}
+            switch (prev_prefix_char) {
+                '\'' => {
+                    prefix = .quote;
+                },
+                '`' => {
+                    prefix = .quasiquote;
+                },
+                ',' => {
+                    prefix = .unquote;
+                },
+                '!' => {
+                    prefix = .macro_expansion;
+                },
+                else => {
+                    prefix = .none;
                 }
-                curr_idx += 1;
             }
+            prev_prefix_char = 0;
 
             try result_tokens.append(.{
                 .parenthesis = .{
@@ -124,6 +128,26 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
             curr_idx += 1;
         } else if (std.ascii.isAlphabetic(code[curr_idx])) {
             //Symbols
+            var prefix: ParenthesisPrefix = .none;
+            switch (prev_prefix_char) {
+                '\'' => {
+                    prefix = .quote;
+                },
+                '`' => {
+                    prefix = .quasiquote;
+                },
+                ',' => {
+                    prefix = .unquote;
+                },
+                '!' => {
+                    prefix = .macro_expansion;
+                },
+                else => {
+                    prefix = .none;
+                }
+            }
+            prev_prefix_char = 0;
+
             var symbol_str = std.ArrayList(u8).init(allocator);
             while (std.ascii.isAlphabetic(code[curr_idx])) {
                 try symbol_str.append(code[curr_idx]);
@@ -131,7 +155,7 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
             }
 
             try result_tokens.append(.{ .symbol = .{
-                .prefix = .none,
+                .prefix = prefix,
                 .contents = symbol_str,
             } });
         } else if (std.ascii.isDigit(code[curr_idx]) or utils.isValueInArray(u8, &[_]u8{ '+', '-' }, code[curr_idx])) {
