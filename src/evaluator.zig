@@ -36,10 +36,10 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
         .list => |*list| {
             switch (list.contents.items[0].value.*) {
                 .symbol => |*sym| {
-                    if (std.mem.eql(u8, sym.items, "defmacro")) {
-                        std.debug.print("Macro {s} defined", .{sym.items});
+                    if (sym.prefix == .none and std.mem.eql(u8, sym.contents.items, "defmacro")) {
+                        std.debug.print("Macro {s} defined", .{sym.contents.items});
 
-                        var treap_entry = module_ctx.macros.getEntryFor(sym.items);
+                        var treap_entry = module_ctx.macros.getEntryFor(sym.contents.items);
                         const treap_node = try module_ctx.macros_nodes.addOne(allocator);
                         treap_entry.set(treap_node);
                     } else {}

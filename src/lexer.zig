@@ -20,9 +20,18 @@ const Parenthesis = struct {
     is_right: bool,
 };
 
+const Symbol = struct {
+    prefix: ParenthesisPrefix,
+    contents: std.ArrayList(u8),
+
+    fn deinit(self: *Symbol) void {
+        self.contents.deinit();
+    }
+};
+
 pub const Token = union(enum) {
     parenthesis: Parenthesis,
-    symbol: std.ArrayList(u8),
+    symbol: Symbol,
     number_literal: f64,
     string_literal: std.ArrayList(u8),
 
@@ -56,7 +65,7 @@ pub const Token = union(enum) {
                 });
             },
             .symbol => |*sym| {
-                try std.fmt.format(result_writer, "Symbol(\"{s}\")", .{sym.items});
+                try std.fmt.format(result_writer, "Symbol(\"{s}\")", .{sym.contents.items});
             },
             .number_literal => |*num| {
                 try std.fmt.format(result_writer, "NumberLiteral({d})", .{num.*});
@@ -121,9 +130,10 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
                 curr_idx += 1;
             }
 
-            try result_tokens.append(.{
-                .symbol = symbol_str,
-            });
+            try result_tokens.append(.{ .symbol = .{
+                .prefix = .none,
+                .contents = symbol_str,
+            } });
         } else if (std.ascii.isDigit(code[curr_idx]) or utils.isValueInArray(u8, &[_]u8{ '+', '-' }, code[curr_idx])) {
             // Number literals
             var negative = false;

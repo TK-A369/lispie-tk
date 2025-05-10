@@ -16,9 +16,18 @@ pub const LispieList = struct {
     }
 };
 
+pub const LispieSymbol = struct {
+    prefix: lexer.ParenthesisPrefix,
+    contents: std.ArrayList(u8),
+
+    pub fn deinit(self: *LispieSymbol) void {
+        self.contents.deinit();
+    }
+};
+
 pub const LispieValue = union(enum) {
     list: LispieList,
-    symbol: std.ArrayList(u8),
+    symbol: LispieSymbol,
     number: f64,
 
     pub fn deinit(self: *LispieValue) void {
@@ -75,7 +84,7 @@ pub const LispieValue = union(enum) {
                     _ = i;
                     try result_writer.writeAll("  ");
                 }
-                try std.fmt.format(result_writer, "{s}", .{sym.items});
+                try std.fmt.format(result_writer, "{s}", .{sym.contents.items});
             },
             .number => |*num| {
                 for (0..depth) |i| {
@@ -133,10 +142,13 @@ pub fn parse(tokens: []const lexer.Token, allocator: std.mem.Allocator) !ParseRe
             // We don't copy sym.* (of type ArrayList(u8)), because it may be freed before the parsing result is used
             // We also don't use clone methods because we might use different allocators
             var symbol_str = std.ArrayList(u8).init(allocator);
-            try symbol_str.appendSlice(sym.items);
+            try symbol_str.appendSlice(sym.contents.items);
 
             const sym_value_ptr = try allocator.create(LispieValue);
-            sym_value_ptr.* = .{ .symbol = symbol_str };
+            sym_value_ptr.* = .{ .symbol = .{
+                .prefix = sym.prefix,
+                .contents = symbol_str,
+            } };
             const sym_value_rc = try utils.RefCount(LispieValue).init(sym_value_ptr, allocator);
 
             return .{
