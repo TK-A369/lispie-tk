@@ -14,6 +14,18 @@ pub const LispieList = struct {
         }
         self.contents.deinit();
     }
+
+    pub fn clone(self: *LispieList, allocator: std.mem.Allocator) !LispieList {
+        var clone_contents = std.ArrayList(utils.RefCount(LispieValue)).init(allocator);
+        for (self.contents.items) |*child| {
+            try clone_contents.append(child.clone());
+        }
+        return .{
+            .par_type = self.par_type,
+            .prefix = self.prefix,
+            .contents = clone_contents,
+        };
+    }
 };
 
 pub const LispieSymbol = struct {
@@ -22,6 +34,17 @@ pub const LispieSymbol = struct {
 
     pub fn deinit(self: *LispieSymbol) void {
         self.contents.deinit();
+    }
+
+    pub fn clone(self: *LispieSymbol, allocator: std.mem.Allocator) !LispieSymbol {
+        var clone_contents = std.ArrayList(u8).init(allocator);
+        for (self.contents.items) |*ch| {
+            try clone_contents.append(ch.*);
+        }
+        return .{
+            .prefix = self.prefix,
+            .contents = clone_contents,
+        };
     }
 };
 
@@ -39,6 +62,24 @@ pub const LispieValue = union(enum) {
                 sym.deinit();
             },
             else => {},
+        }
+    }
+
+    pub fn clone(self: *LispieValue, allocator: std.mem.Allocator) !LispieValue {
+        switch (self.*) {
+            .list => |*list| {
+                return .{
+                    .list = try list.clone(allocator),
+                };
+            },
+            .symbol => |*sym| {
+                return .{
+                    .symbol = try sym.clone(allocator),
+                };
+            },
+            else => {
+                return self.*;
+            }
         }
     }
 

@@ -57,7 +57,7 @@ pub fn main() !void {
 
     var macro_iter = module_ctx.macros.inorderIterator();
     while (macro_iter.next()) |macro_node| {
-        try stdout.print("Macro {s}", .{macro_node.key});
+        try stdout.print("Macro {s}\n", .{macro_node.key});
     }
 
     try bw.flush(); // Don't forget to flush!

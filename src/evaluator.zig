@@ -34,39 +34,51 @@ pub const ModuleContext = struct {
 pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
     switch (value.*) {
         .list => |*list| {
-            switch (list.contents.items[0].value.*) {
-                .symbol => |*sym| {
-                    if (sym.prefix == .none and std.mem.eql(u8, sym.contents.items, "defmacro")) {
-                        std.debug.print("Macro {s} defined", .{sym.contents.items});
-
-                        var treap_entry = module_ctx.macros.getEntryFor(sym.contents.items);
-                        const treap_node = try module_ctx.macros_nodes.addOne(allocator);
-                        treap_entry.set(treap_node);
-                    } else {}
-                },
-                else => {
-                    var children_results = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
-                    for (list.contents.items) |*child| {
-                        const child_result = try evaluateReadMacros(child.value, module_ctx, allocator);
-                        try children_results.append(child_result);
+            match_defmacro: {
+                switch (list.contents.items[0].value.*) {
+                    .symbol => |*sym_defmacro| {
+                        if (sym_defmacro.prefix != .none or !std.mem.eql(u8, sym_defmacro.contents.items, "defmacro")) {
+                            break :match_defmacro;
+                        }
+                    },
+                    else => {
+                        break :match_defmacro;
                     }
-
-                    const result_ptr = try allocator.create(parser.LispieValue);
-                    result_ptr.* = .{ .list = .{
-                        .par_type = list.par_type,
-                        .prefix = list.prefix,
-                        .contents = children_results,
-                    } };
-                    const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
-                    return result_rc;
                 }
-            }
-        },
-        else => {},
-    }
 
-    const result_ptr = try allocator.create(parser.LispieValue);
-    result_ptr.* = value.*;
-    const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
-    return result_rc;
+                const macro_name_sym = switch (list.contents.items[1].value.*) {
+                    .symbol => |*sym_name| sym_name,
+                    else => {
+                        break :match_defmacro;
+                    },
+                };
+
+                std.debug.print("Macro {s} defined", .{macro_name_sym.contents.items});
+
+                var treap_entry = module_ctx.macros.getEntryFor(macro_name_sym.contents.items);
+                const treap_node = try module_ctx.macros_nodes.addOne(allocator);
+                treap_entry.set(treap_node);
+            }
+            var children_results = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
+            for (list.contents.items) |*child| {
+                const child_result = try evaluateReadMacros(child.value, module_ctx, allocator);
+                try children_results.append(child_result);
+            }
+
+            const result_ptr = try allocator.create(parser.LispieValue);
+            result_ptr.* = .{ .list = .{
+                .par_type = list.par_type,
+                .prefix = list.prefix,
+                .contents = children_results,
+            } };
+            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+            return result_rc;
+        },
+        else => {
+            const result_ptr = try allocator.create(parser.LispieValue);
+            result_ptr.* = try value.clone(allocator);
+            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+            return result_rc;
+        },
+    }
 }
