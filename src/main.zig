@@ -55,10 +55,12 @@ pub fn main() !void {
     defer macro_read_result_str.deinit();
     try stdout.print("Macro read result:\n{s}\n", .{macro_read_result_str.items});
 
-    var macro_iter = module_ctx.macros.inorderIterator();
-    while (macro_iter.next()) |macro_node| {
-        try stdout.print("Macro {s}\n", .{macro_node.key});
-    }
+    // var macro_iter = module_ctx.macros.inorderIterator();
+    // while (macro_iter.next()) |macro_node| {
+    //     var macro_def_str = try macro_node.key.toString(0, allocator);
+    //     defer macro_def_str.deinit();
+    //     try stdout.print("Macro {s}:\n{s}\n", .{ macro_node.key, macro_def_str });
+    // }
 
     try bw.flush(); // Don't forget to flush!
 }

@@ -12,20 +12,18 @@ pub const ModuleContext = struct {
 
     allocator: std.mem.Allocator,
     // arena_allocator: std.heap.ArenaAllocator,
-    macros_nodes: std.SegmentedList(MacrosTreap.Node, 16),
-    macros: MacrosTreap,
+    macros: std.StringHashMap(utils.RefCount(parser.LispieValue)),
 
     pub fn init(allocator: std.mem.Allocator) ModuleContext {
         return .{
             .allocator = allocator,
             // .arena_allocator = .init(allocator),
-            .macros_nodes = .{},
-            .macros = .{},
+            .macros = .init(allocator),
         };
     }
 
     pub fn deinit(self: *ModuleContext) void {
-        self.macros_nodes.deinit(self.allocator);
+        self.macros.deinit();
         // self.macros_nodes.deinit(self.arena_allocator);
         // self.arena_allocator.deinit();
     }
@@ -55,9 +53,10 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
 
                 std.debug.print("Macro {s} defined", .{macro_name_sym.contents.items});
 
-                var treap_entry = module_ctx.macros.getEntryFor(macro_name_sym.contents.items);
-                const treap_node = try module_ctx.macros_nodes.addOne(allocator);
-                treap_entry.set(treap_node);
+                // var treap_entry = module_ctx.macros.getEntryFor(macro_name_sym.contents.items);
+                // const treap_node = try module_ctx.macros_nodes.addOne(allocator);
+                // treap_entry.set(treap_node);
+                try module_ctx.macros.put(macro_name_sym.contents.items, list.contents.items[2].clone());
             }
             var children_results = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
             for (list.contents.items) |*child| {
