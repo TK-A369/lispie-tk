@@ -168,8 +168,19 @@ pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, r
             //TODO: Actually call the function
         },
         .symbol => |*sym| {
-            //TODO: Read from the variable/binding
-            _ = sym;
+            const binding_value = try runtime_ctx.value.get_binding(sym.contents.items);
+            if (binding_value) |binding_value_nonull| {
+                return binding_value_nonull;
+            }
+
+            const result_ptr = try allocator.create(parser.LispieValue);
+            result_ptr.* = .{ .list = .{
+                .par_type = .normal,
+                .prefix = .none,
+                .contents = .init(allocator),
+            } };
+            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+            return result_rc;
         },
         else => {
             const result_ptr = try allocator.create(parser.LispieValue);
