@@ -251,12 +251,25 @@ pub fn evaluate(
     value: *parser.LispieValue,
     module_ctx: *ModuleContext,
     allocator: std.mem.Allocator,
+    debug_prints: bool,
 ) !utils.RefCount(parser.LispieValue) {
     var macro_read_result = try evaluateReadMacros(value, module_ctx, allocator);
     defer macro_read_result.unref();
 
+    if (debug_prints) {
+        var macro_read_result_str = try macro_read_result.value.toString(0, allocator);
+        defer macro_read_result_str.deinit();
+        std.debug.print("Macro read result:\n{s}\n", .{macro_read_result_str.items});
+    }
+
     var macro_expand_result = try evaluateExpandMacros(macro_read_result.value, module_ctx, allocator);
     defer macro_expand_result.unref();
+
+    if (debug_prints) {
+        var macro_expand_result_str = try macro_expand_result.value.toString(0, allocator);
+        defer macro_expand_result_str.deinit();
+        std.debug.print("Macro expand result:\n{s}\n", .{macro_expand_result_str.items});
+    }
 
     const runtime_ctx_ptr = try allocator.create(RuntimeContext);
     runtime_ctx_ptr.* = try .init(allocator);
@@ -269,6 +282,13 @@ pub fn evaluate(
         runtime_ctx_rc,
         allocator,
     );
+
+    if (debug_prints) {
+        var eval_result_str = try runtime_evaluation_result.value.toString(0, allocator);
+        defer eval_result_str.deinit();
+        std.debug.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
+    }
+
     return runtime_evaluation_result;
 }
 

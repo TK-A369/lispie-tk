@@ -55,12 +55,13 @@ pub fn main() !void {
         parse_result.val.value,
         &module_ctx,
         allocator,
+        true,
     );
     defer eval_result.unref();
 
-    var eval_result_str = try eval_result.value.toString(0, allocator);
-    defer eval_result_str.deinit();
-    try stdout.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
+    // var eval_result_str = try eval_result.value.toString(0, allocator);
+    // defer eval_result_str.deinit();
+    // try stdout.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
 
     var macro_iter = try module_ctx.macros.inorderIterator();
     defer macro_iter.deinit();
