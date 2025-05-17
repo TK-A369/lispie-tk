@@ -38,6 +38,10 @@ pub const ModuleContext = struct {
     }
 };
 
+pub const RuntimeEvaluationError = error{
+    EmptyCall,
+};
+
 pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
     switch (value.*) {
         .list => |*list| {
@@ -89,5 +93,58 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
             const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
             return result_rc;
         },
+    }
+}
+
+pub fn evaluateExpandMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+    _ = module_ctx;
+
+    switch (value.*) {
+        // .list => |*list| {
+        //     //TODO
+        // },
+        else => {
+            const result_ptr = try allocator.create(parser.LispieValue);
+            result_ptr.* = try value.clone(allocator);
+            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+            return result_rc;
+        }
+    }
+}
+
+pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+    switch (value.*) {
+        .list => |*list| {
+            if (list.items.len < 1) {
+                return RuntimeEvaluationError.EmptyCall;
+            }
+            var function_evaluated = try evaluateRuntime(list.contents.items[0].value, module_ctx, allocator);
+            defer function_evaluated.unref();
+
+            var args_evaluated = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
+            for (1..list.items.len) |i| {
+                try args_evaluated.append(try evaluateRuntime(
+                    list.contents.items[i].value,
+                    module_ctx,
+                    allocator,
+                ));
+            }
+            defer {
+                for (args_evaluated.items) |ae| {
+                    ae.unref();
+                }
+            }
+
+            //TODO: Actually call the function
+        },
+        .symbol => |*sym| {
+            //TODO: Read from the variable/binding
+        },
+        else => {
+            const result_ptr = try allocator.create(parser.LispieValue);
+            result_ptr.* = try value.clone(allocator);
+            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+            return result_rc;
+        }
     }
 }
