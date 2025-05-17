@@ -4,10 +4,6 @@ const utils = @import("utils.zig");
 const parser = @import("parser.zig");
 
 pub const ModuleContext = struct {
-    fn treapCmp(lhs: []const u8, rhs: []const u8) std.math.Order {
-        return std.mem.order(u8, lhs, rhs);
-    }
-
     const MacrosTrie = utils.Trie(MacroDef);
     const MacroDef = struct {
         args: utils.RefCount(parser.LispieValue),
@@ -35,6 +31,38 @@ pub const ModuleContext = struct {
         self.macros.deinit();
         // self.macros_nodes.deinit(self.arena_allocator);
         // self.arena_allocator.deinit();
+    }
+};
+
+pub const RuntimeContext = struct {
+    const ValuesTrie = utils.Trie(utils.RefCount(parser.LispieValue));
+
+    bindings: ValuesTrie,
+    outer_ctx: ?utils.RefCount(RuntimeContext),
+
+    pub fn init(allocator: std.mem.Allocator) !RuntimeContext {
+        return .{
+            .bindings = .init(allocator),
+            .outer_ctx = null,
+        };
+    }
+
+    pub fn deinit(self: *RuntimeContext) void {
+        self.bindings.deinit();
+        if (self.outer_ctx) |outer_ctx_nonull| {
+            outer_ctx_nonull.unref();
+        }
+    }
+
+    pub fn get_binding(self: *const RuntimeContext, name: []const u8) !?utils.RefCount(parser.LispieValue) {
+        const result = try self.bindings.get(name, false);
+        if (result) |result_nonull| {
+            return result_nonull.clone();
+        }
+        if (self.outer_ctx) |outer_ctx_nonull| {
+            return outer_ctx_nonull.value.get_binding(name);
+        }
+        return null;
     }
 };
 
@@ -112,7 +140,9 @@ pub fn evaluateExpandMacros(value: *parser.LispieValue, module_ctx: *ModuleConte
     }
 }
 
-pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, runtime_ctx: utils.RefCount(RuntimeContext), allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+    _ = runtime_ctx;
+
     switch (value.*) {
         .list => |*list| {
             if (list.items.len < 1) {
@@ -139,6 +169,7 @@ pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, a
         },
         .symbol => |*sym| {
             //TODO: Read from the variable/binding
+            _ = sym;
         },
         else => {
             const result_ptr = try allocator.create(parser.LispieValue);
