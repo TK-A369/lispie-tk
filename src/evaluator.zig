@@ -42,19 +42,19 @@ pub const RuntimeContext = struct {
 
     pub fn init(allocator: std.mem.Allocator) !RuntimeContext {
         return .{
-            .bindings = .init(allocator),
+            .bindings = try .init(allocator),
             .outer_ctx = null,
         };
     }
 
     pub fn deinit(self: *RuntimeContext) void {
         self.bindings.deinit();
-        if (self.outer_ctx) |outer_ctx_nonull| {
+        if (self.outer_ctx) |*outer_ctx_nonull| {
             outer_ctx_nonull.unref();
         }
     }
 
-    pub fn get_binding(self: *const RuntimeContext, name: []const u8) !?utils.RefCount(parser.LispieValue) {
+    pub fn get_binding(self: *RuntimeContext, name: []const u8) !?utils.RefCount(parser.LispieValue) {
         const result = try self.bindings.get(name, false);
         if (result) |result_nonull| {
             return result_nonull.clone();
@@ -154,27 +154,33 @@ pub fn evaluateRuntime(
 ) !utils.RefCount(parser.LispieValue) {
     switch (value.*) {
         .list => |*list| {
-            if (list.items.len < 1) {
+            if (list.contents.items.len < 1) {
                 return RuntimeEvaluationError.EmptyCall;
             }
-            var function_evaluated = try evaluateRuntime(list.contents.items[0].value, module_ctx, allocator);
+            var function_evaluated = try evaluateRuntime(
+                list.contents.items[0].value,
+                module_ctx,
+                runtime_ctx,
+                allocator,
+            );
             defer function_evaluated.unref();
 
             var args_evaluated = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
-            for (1..list.items.len) |i| {
+            for (1..list.contents.items.len) |i| {
                 try args_evaluated.append(try evaluateRuntime(
                     list.contents.items[i].value,
                     module_ctx,
+                    runtime_ctx,
                     allocator,
                 ));
             }
             defer {
-                for (args_evaluated.items) |ae| {
+                for (args_evaluated.items) |*ae| {
                     ae.unref();
                 }
             }
 
-            return try executeFunction(function_evaluated, args_evaluated, module_ctx, runtime_ctx, allocator);
+            return try executeFunction(function_evaluated.value, args_evaluated.items, module_ctx, runtime_ctx, allocator);
         },
         .symbol => |*sym| {
             const binding_value = try runtime_ctx.value.get_binding(sym.contents.items);
@@ -200,34 +206,58 @@ pub fn evaluateRuntime(
     }
 }
 
+pub fn evaluate(
+    value: *parser.LispieValue,
+    module_ctx: *ModuleContext,
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
+    var macro_read_result = try evaluateReadMacros(value, module_ctx, allocator);
+    defer macro_read_result.unref();
+
+    var macro_expand_result = try evaluateExpandMacros(macro_read_result.value, module_ctx, allocator);
+    defer macro_expand_result.unref();
+
+    const runtime_ctx_ptr = try allocator.create(RuntimeContext);
+    runtime_ctx_ptr.* = try .init(allocator);
+    var runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(runtime_ctx_ptr, allocator);
+    defer runtime_ctx_rc.unref();
+
+    const runtime_evaluation_result = try evaluateRuntime(
+        macro_expand_result.value,
+        module_ctx,
+        runtime_ctx_rc,
+        allocator,
+    );
+    return runtime_evaluation_result;
+}
+
 fn executeFunction(
     function: *parser.LispieValue,
     args: []utils.RefCount(parser.LispieValue),
     module_ctx: *ModuleContext,
     runtime_ctx: utils.RefCount(RuntimeContext),
     allocator: std.mem.Allocator,
-) !utils.RefCount(parser.LispieValue) {
-    _ = module_ctx;
-
+) (RuntimeEvaluationError || error{OutOfMemory})!utils.RefCount(parser.LispieValue) {
     // Check if the value passed as function really meets function-value requirements
     if (!switch (function.*) {
         .list => true,
         else => false,
     }) {
-        return RuntimeEvaluationError.AttemptedToCallUncallable;
+        return RuntimeEvaluationError.UncallableCallAttempt;
     }
-    if (function.list.contents.len != 3) {
-        return RuntimeEvaluationError.AttemptedToCallUncallable;
+    if (function.list.contents.items.len != 3) {
+        return RuntimeEvaluationError.UncallableCallAttempt;
     }
 
     // Create new scope
+    var runtime_ctx_mut = runtime_ctx;
     const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
-    inner_runtime_ctx_ptr.* = .init(allocator);
-    inner_runtime_ctx_ptr.outer_ctx = runtime_ctx.clone();
+    inner_runtime_ctx_ptr.* = try .init(allocator);
+    inner_runtime_ctx_ptr.outer_ctx = runtime_ctx_mut.clone();
     var inner_runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(inner_runtime_ctx_ptr, allocator);
     defer inner_runtime_ctx_rc.unref();
 
-    const args_def = function.list.contents.items[1].clone();
+    var args_def = function.list.contents.items[1].clone();
     defer args_def.unref();
     switch (args_def.value.*) {
         .list => |*args_def_list| {
@@ -258,4 +288,9 @@ fn executeFunction(
         },
         else => {},
     }
+
+    var function_body = function.list.contents.items[2].clone();
+    defer function_body.unref();
+
+    return try evaluateRuntime(function_body.value, module_ctx, inner_runtime_ctx_rc, allocator);
 }

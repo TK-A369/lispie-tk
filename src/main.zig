@@ -48,12 +48,19 @@ pub fn main() !void {
 
     var module_ctx = try evaluator.ModuleContext.init(allocator);
     defer module_ctx.deinit();
-    var macro_read_result = try evaluator.evaluateReadMacros(parse_result.val.value, &module_ctx, allocator);
-    defer macro_read_result.unref();
 
-    var macro_read_result_str = try macro_read_result.value.toString(0, allocator);
-    defer macro_read_result_str.deinit();
-    try stdout.print("Macro read result:\n{s}\n", .{macro_read_result_str.items});
+    // var macro_read_result = try evaluator.evaluateReadMacros(parse_result.val.value, &module_ctx, allocator);
+    // defer macro_read_result.unref();
+    var eval_result = try evaluator.evaluate(
+        parse_result.val.value,
+        &module_ctx,
+        allocator,
+    );
+    defer eval_result.unref();
+
+    var eval_result_str = try eval_result.value.toString(0, allocator);
+    defer eval_result_str.deinit();
+    try stdout.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
 
     var macro_iter = try module_ctx.macros.inorderIterator();
     defer macro_iter.deinit();
