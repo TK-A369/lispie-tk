@@ -70,6 +70,7 @@ pub const RuntimeEvaluationError = error{
     EmptyCall,
     UncallableCallAttempt,
     MalformedFunctionArgs,
+    MalformedLet,
 };
 
 pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
@@ -157,6 +158,46 @@ pub fn evaluateRuntime(
             if (list.contents.items.len < 1) {
                 return RuntimeEvaluationError.EmptyCall;
             }
+
+            // Check if this is special form call
+            switch (list.contents.items[0].value.*) {
+                .symbol => |*special_form_sym| {
+                    if (std.mem.eql(u8, special_form_sym.contents.items, "let")) {
+                        var runtime_ctx_mut = runtime_ctx;
+                        const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
+                        inner_runtime_ctx_ptr.* = try .init(allocator);
+                        inner_runtime_ctx_ptr.outer_ctx = runtime_ctx_mut.clone();
+                        var inner_runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(inner_runtime_ctx_ptr, allocator);
+                        defer inner_runtime_ctx_rc.unref();
+
+                        for (0..(list.contents.items.len - 2)) |i| {
+                            // Check if binding definition is correct
+                            switch (list.contents.items[i + 1].value.*) {
+                                .list => |*binding_def_list| {
+                                    switch (binding_def_list.contents.items[0].value.*) {
+                                        .symbol => {},
+                                        else => {
+                                            return RuntimeEvaluationError.MalformedLet;
+                                        }
+                                    }
+                                },
+                                else => {
+                                    return RuntimeEvaluationError.MalformedLet;
+                                }
+                            }
+
+                            const binding_value_evaluated = try evaluateRuntime(list.contents.items[i + 1].value.list.contents.items[1].value, module_ctx, inner_runtime_ctx_rc, allocator);
+
+                            (try inner_runtime_ctx_rc.value.bindings.get(
+                                list.contents.items[i + 1].value.list.contents.items[0].value.symbol.contents.items,
+                                true,
+                            )).?.* = binding_value_evaluated;
+                        }
+                    }
+                },
+                else => {}
+            }
+
             var function_evaluated = try evaluateRuntime(
                 list.contents.items[0].value,
                 module_ctx,
