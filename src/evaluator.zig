@@ -98,7 +98,7 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
                     },
                 };
 
-                std.debug.print("Macro {s} defined", .{macro_name_sym.contents.items});
+                std.debug.print("Macro {s} defined\n", .{macro_name_sym.contents.items});
 
                 (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.args = list.contents.items[2].clone();
                 (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.body = list.contents.items[3].clone();
@@ -157,6 +157,17 @@ pub fn evaluateRuntime(
 
     switch (value.*) {
         .list => |*list| {
+            // Quotelists will remain unchanged, only the quote prefix will be removed
+            if (list.prefix == .quote) {
+                std.debug.print("Quotelist is being evaluated!\n", .{});
+
+                const result_ptr = try allocator.create(parser.LispieValue);
+                result_ptr.* = try value.clone(allocator);
+                result_ptr.list.prefix = .none;
+                const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+                return result_rc;
+            }
+
             if (list.contents.items.len < 1) {
                 return RuntimeEvaluationError.EmptyCall;
             }
@@ -219,6 +230,9 @@ pub fn evaluateRuntime(
                                 return child_eval_result.clone();
                             }
                         }
+                    } else if (std.mem.eql(u8, special_form_sym.contents.items, "syscall")) {
+                        std.debug.print("`syscall` special form is being evaluated!\n", .{});
+                        return makeEmptyList(allocator);
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "defmacro")) {
                         return makeEmptyList(allocator);
                     }

@@ -17,13 +17,16 @@ pub fn main() !void {
     const code =
         \\(do
         \\  (defmacro mymacro [f a b] `(do (,f ,a) (,f ,b)))
-        \\  (print
+        \\  (syscall
+        \\    print
         \\    "3 + 4 = "
-        \\    (add
+        \\    (syscall
+        \\      add
         \\      3
         \\      4)))
     ;
     try stdout.print("Code:\n\"\"\"\n{s}\n\"\"\"\n", .{code});
+    try bw.flush();
     const tokens = try lexer.tokenize(code, allocator);
     defer tokens.deinit();
     defer {
@@ -32,12 +35,14 @@ pub fn main() !void {
         }
     }
     try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
+    try bw.flush();
 
     for (tokens.items) |tok| {
         var token_str = try tok.toString(allocator);
         defer token_str.deinit();
         try stdout.print("Token: {s}\n", .{token_str.items});
     }
+    try bw.flush();
 
     var parse_result = try parser.parse(tokens.items, allocator);
     defer parse_result.deinit();
@@ -45,6 +50,7 @@ pub fn main() !void {
     var parse_result_str = try parse_result.val.value.toString(0, allocator);
     defer parse_result_str.deinit();
     try stdout.print("Parse result:\n{s}\n", .{parse_result_str.items});
+    try bw.flush();
 
     var module_ctx = try evaluator.ModuleContext.init(allocator);
     defer module_ctx.deinit();
@@ -58,6 +64,7 @@ pub fn main() !void {
         true,
     );
     defer eval_result.unref();
+    try bw.flush();
 
     // var eval_result_str = try eval_result.value.toString(0, allocator);
     // defer eval_result_str.deinit();
