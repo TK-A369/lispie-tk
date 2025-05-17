@@ -71,6 +71,8 @@ pub const RuntimeEvaluationError = error{
     UncallableCallAttempt,
     MalformedFunctionArgs,
     MalformedLet,
+    MalformedSyscall,
+    UnknownSyscall,
 };
 
 pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
@@ -232,7 +234,16 @@ pub fn evaluateRuntime(
                         }
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "syscall")) {
                         std.debug.print("`syscall` special form is being evaluated!\n", .{});
-                        return makeEmptyList(allocator);
+
+                        var args = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
+                        try args.append(list.contents.items[1].clone());
+
+                        for (list.contents.items[2..]) |arg| {
+                            try args.append(try evaluateRuntime(arg.value, module_ctx, runtime_ctx, allocator));
+                        }
+
+                        // return makeEmptyList(allocator);
+                        return executeSyscall(args.items, allocator);
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "defmacro")) {
                         return makeEmptyList(allocator);
                     }
@@ -402,4 +413,48 @@ fn executeFunction(
     defer function_body.unref();
 
     return try evaluateRuntime(function_body.value, module_ctx, inner_runtime_ctx_rc, allocator);
+}
+
+fn executeSyscall(
+    args: []utils.RefCount(parser.LispieValue),
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
+    if (args.len < 1) {
+        return RuntimeEvaluationError.MalformedSyscall;
+    }
+    switch (args[0].value.*) {
+        .symbol => |*sym| {
+            if (std.mem.eql(u8, sym.contents.items, "print")) {
+                for (args[1..]) |arg| {
+                    switch (arg.value.*) {
+                        .list => |*str_list| {
+                            for (str_list.contents.items) |*str_char| {
+                                switch (str_char.value.*) {
+                                    .number => |*str_char_code| {
+                                        //TODO: Use stdout instead of stderr
+                                        std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                                    },
+                                    else => {
+                                        return RuntimeEvaluationError.MalformedSyscall;
+                                    }
+                                }
+                            }
+                        },
+                        .number => |*str_char_code| {
+                            //TODO: Use stdout instead of stderr
+                            std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                        },
+                        else => {
+                            return RuntimeEvaluationError.MalformedSyscall;
+                        }
+                    }
+                }
+                return makeEmptyList(allocator);
+            } else {
+                return RuntimeEvaluationError.UnknownSyscall;
+            }
+        },
+        else => {}
+    }
+    return RuntimeEvaluationError.MalformedSyscall;
 }
