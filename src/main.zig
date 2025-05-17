@@ -46,7 +46,7 @@ pub fn main() !void {
     defer parse_result_str.deinit();
     try stdout.print("Parse result:\n{s}\n", .{parse_result_str.items});
 
-    var module_ctx = evaluator.ModuleContext.init(allocator);
+    var module_ctx = try evaluator.ModuleContext.init(allocator);
     defer module_ctx.deinit();
     var macro_read_result = try evaluator.evaluateReadMacros(parse_result.val.value, &module_ctx, allocator);
     defer macro_read_result.unref();
@@ -55,12 +55,15 @@ pub fn main() !void {
     defer macro_read_result_str.deinit();
     try stdout.print("Macro read result:\n{s}\n", .{macro_read_result_str.items});
 
-    // var macro_iter = module_ctx.macros.inorderIterator();
-    // while (macro_iter.next()) |macro_node| {
-    //     var macro_def_str = try macro_node.key.toString(0, allocator);
-    //     defer macro_def_str.deinit();
-    //     try stdout.print("Macro {s}:\n{s}\n", .{ macro_node.key, macro_def_str });
-    // }
+    var macro_iter = try module_ctx.macros.inorderIterator();
+    defer macro_iter.deinit();
+    while (try macro_iter.next()) |macro| {
+        var macro_args_str = try macro.value.args.value.toString(0, allocator);
+        defer macro_args_str.deinit();
+        var macro_body_str = try macro.value.body.value.toString(0, allocator);
+        defer macro_body_str.deinit();
+        try stdout.print("Macro {s}:\nArgs:\n{s}\nBody:\n{s}\n\n", .{ macro.key, macro_args_str.items, macro_body_str.items });
+    }
 
     try bw.flush(); // Don't forget to flush!
 }

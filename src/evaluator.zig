@@ -8,17 +8,26 @@ pub const ModuleContext = struct {
         return std.mem.order(u8, lhs, rhs);
     }
 
-    const MacrosTreap = std.Treap([]const u8, treapCmp);
+    const MacrosTrie = utils.Trie(MacroDef);
+    const MacroDef = struct {
+        args: utils.RefCount(parser.LispieValue),
+        body: utils.RefCount(parser.LispieValue),
+
+        pub fn deinit(self: *MacroDef) void {
+            self.args.unref();
+            self.body.unref();
+        }
+    };
 
     allocator: std.mem.Allocator,
     // arena_allocator: std.heap.ArenaAllocator,
-    macros: std.StringHashMap(utils.RefCount(parser.LispieValue)),
+    macros: MacrosTrie,
 
-    pub fn init(allocator: std.mem.Allocator) ModuleContext {
+    pub fn init(allocator: std.mem.Allocator) !ModuleContext {
         return .{
             .allocator = allocator,
             // .arena_allocator = .init(allocator),
-            .macros = .init(allocator),
+            .macros = try MacrosTrie.init(allocator),
         };
     }
 
@@ -33,6 +42,9 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
     switch (value.*) {
         .list => |*list| {
             match_defmacro: {
+                if (list.contents.items.len < 4) {
+                    break :match_defmacro;
+                }
                 switch (list.contents.items[0].value.*) {
                     .symbol => |*sym_defmacro| {
                         if (sym_defmacro.prefix != .none or !std.mem.eql(u8, sym_defmacro.contents.items, "defmacro")) {
@@ -53,10 +65,8 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
 
                 std.debug.print("Macro {s} defined", .{macro_name_sym.contents.items});
 
-                // var treap_entry = module_ctx.macros.getEntryFor(macro_name_sym.contents.items);
-                // const treap_node = try module_ctx.macros_nodes.addOne(allocator);
-                // treap_entry.set(treap_node);
-                try module_ctx.macros.put(macro_name_sym.contents.items, list.contents.items[2].clone());
+                (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.args = list.contents.items[2].clone();
+                (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.body = list.contents.items[3].clone();
             }
             var children_results = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
             for (list.contents.items) |*child| {

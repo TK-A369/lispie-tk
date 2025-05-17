@@ -162,13 +162,13 @@ pub fn Trie(comptime T: type) type {
         }
 
         pub fn deinit(self: *This) void {
-            self.deinit_node(self.root);
+            self.deinitNode(self.root);
         }
 
         pub fn get(self: *This, key: []const u8, create_if_absent: bool) !?*T {
-            return get_internal(self, key, self.root, create_if_absent);
+            return getInternal(self, key, self.root, create_if_absent);
         }
-        pub fn inorder_iterator(self: *This) !InorderIterator {
+        pub fn inorderIterator(self: *This) !InorderIterator {
             var nodes_stack = std.ArrayList(InorderIterator.StackFrame).init(self.allocator);
             try nodes_stack.append(.{
                 .node = self.root,
@@ -182,19 +182,19 @@ pub fn Trie(comptime T: type) type {
             };
         }
 
-        fn deinit_node(self: *This, node: *Node) void {
+        fn deinitNode(self: *This, node: *Node) void {
             for (node.children) |child| {
                 if (child) |child_nonull| {
-                    self.deinit_node(child_nonull);
+                    self.deinitNode(child_nonull);
                 }
             }
             if (node.element) |element_nonull| {
                 if (std.meta.hasMethod(T, "unref")) {
-                    self.value.unref();
+                    element_nonull.unref();
                     std.debug.print("Unrefing value inside Trie\n", .{});
                 }
                 if (std.meta.hasMethod(T, "deinit")) {
-                    self.value.deinit();
+                    element_nonull.deinit();
                     std.debug.print("Deiniting value inside Trie\n", .{});
                 }
                 self.allocator.destroy(element_nonull);
@@ -202,7 +202,7 @@ pub fn Trie(comptime T: type) type {
             self.allocator.destroy(node);
         }
 
-        fn get_internal(self: *This, key: []const u8, node: *Node, create_if_absent: bool) !?*T {
+        fn getInternal(self: *This, key: []const u8, node: *Node, create_if_absent: bool) !?*T {
             if (key.len > 0) {
                 var child = node.children[key[0]];
                 // I believe that right now, there's no better syntax for this
@@ -219,7 +219,7 @@ pub fn Trie(comptime T: type) type {
                         return null;
                     }
                 }
-                return self.get_internal(key[1..], child.?, create_if_absent);
+                return self.getInternal(key[1..], child.?, create_if_absent);
             } else {
                 if (create_if_absent) {
                     if (node.element) |_| {} else {
@@ -248,7 +248,7 @@ test "Trie 1" {
     try std.testing.expectEqual(null, (try trie.get("array", false)));
     try std.testing.expectEqual(null, (try trie.get("banana", false)));
 
-    var iter = try trie.inorder_iterator();
+    var iter = try trie.inorderIterator();
     defer iter.deinit();
     while (try iter.next()) |elem| {
         std.debug.print("\"{s}\": {d}\n", .{ elem.key, elem.value.* });
@@ -264,7 +264,7 @@ test "Trie 2" {
     (try trie.get("Hello world!", true)).?.* = -5;
     (try trie.get("The quick brown fox jumps over the lazy dog.", true)).?.* = 100;
 
-    var iter = try trie.inorder_iterator();
+    var iter = try trie.inorderIterator();
     defer iter.deinit();
     // while (try iter.next()) |elem| {
     //     std.debug.print("\"{s}\": {d}\n", .{ elem.key, elem.value.* });
