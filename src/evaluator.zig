@@ -68,6 +68,8 @@ pub const RuntimeContext = struct {
 
 pub const RuntimeEvaluationError = error{
     EmptyCall,
+    UncallableCallAttempt,
+    MalformedFunctionArgs,
 };
 
 pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
@@ -124,7 +126,11 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
     }
 }
 
-pub fn evaluateExpandMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+pub fn evaluateExpandMacros(
+    value: *parser.LispieValue,
+    module_ctx: *ModuleContext,
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
     _ = module_ctx;
 
     switch (value.*) {
@@ -140,9 +146,12 @@ pub fn evaluateExpandMacros(value: *parser.LispieValue, module_ctx: *ModuleConte
     }
 }
 
-pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, runtime_ctx: utils.RefCount(RuntimeContext), allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
-    _ = runtime_ctx;
-
+pub fn evaluateRuntime(
+    value: *parser.LispieValue,
+    module_ctx: *ModuleContext,
+    runtime_ctx: utils.RefCount(RuntimeContext),
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
     switch (value.*) {
         .list => |*list| {
             if (list.items.len < 1) {
@@ -165,7 +174,7 @@ pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, r
                 }
             }
 
-            //TODO: Actually call the function
+            return try executeFunction(function_evaluated, args_evaluated, module_ctx, runtime_ctx, allocator);
         },
         .symbol => |*sym| {
             const binding_value = try runtime_ctx.value.get_binding(sym.contents.items);
@@ -188,5 +197,65 @@ pub fn evaluateRuntime(value: *parser.LispieValue, module_ctx: *ModuleContext, r
             const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
             return result_rc;
         }
+    }
+}
+
+fn executeFunction(
+    function: *parser.LispieValue,
+    args: []utils.RefCount(parser.LispieValue),
+    module_ctx: *ModuleContext,
+    runtime_ctx: utils.RefCount(RuntimeContext),
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
+    _ = module_ctx;
+
+    // Check if the value passed as function really meets function-value requirements
+    if (!switch (function.*) {
+        .list => true,
+        else => false,
+    }) {
+        return RuntimeEvaluationError.AttemptedToCallUncallable;
+    }
+    if (function.list.contents.len != 3) {
+        return RuntimeEvaluationError.AttemptedToCallUncallable;
+    }
+
+    // Create new scope
+    const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
+    inner_runtime_ctx_ptr.* = .init(allocator);
+    inner_runtime_ctx_ptr.outer_ctx = runtime_ctx.clone();
+    var inner_runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(inner_runtime_ctx_ptr, allocator);
+    defer inner_runtime_ctx_rc.unref();
+
+    const args_def = function.list.contents.items[1].clone();
+    defer args_def.unref();
+    switch (args_def.value.*) {
+        .list => |*args_def_list| {
+            for (args_def_list.contents.items, 0..) |arg_name, i| {
+                if (!switch (arg_name.value.*) {
+                    .symbol => true,
+                    else => false,
+                }) {
+                    return RuntimeEvaluationError.MalformedFunctionArgs;
+                }
+                (try inner_runtime_ctx_rc.value.bindings.get(arg_name.value.symbol.contents.items, true)).?.* = args[i].clone();
+            }
+        },
+        .symbol => |*args_def_sym| {
+            var args_list = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
+            for (args) |arg| {
+                try args_list.append(arg);
+            }
+
+            const args_list_value_ptr = try allocator.create(parser.LispieValue);
+            args_list_value_ptr.* = .{ .list = .{
+                .par_type = .normal,
+                .prefix = .none,
+                .contents = args_list,
+            } };
+            const args_list_value_rc = try utils.RefCount(parser.LispieValue).init(args_list_value_ptr, allocator);
+            (try inner_runtime_ctx_rc.value.bindings.get(args_def_sym.contents.items, true)).?.* = args_list_value_rc;
+        },
+        else => {},
     }
 }

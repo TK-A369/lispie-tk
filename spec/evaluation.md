@@ -34,6 +34,6 @@ The exception from above paragraph is when first element of the list is one of t
 
 - `def` - global immutable binding/variable; consists of two-element square bracket lists, simularly to `let`
 
-- `fn` - represents a function; looks like this: `(fn [a b] (add a (mul b 2)))`, so the 2nd element it argument list (may also be a single symbol, then it will be bound to a list of arguments), and 3rd element is the function body; evaluates to itself
+- `fn` - represents a function; looks like this: `(fn [a b] (add a (mul b 2)))`, so the 2nd element it argument list (may also be a single symbol, then it will be bound to a list of arguments), and 3rd element is the function body; evaluates to itself; TODO: allow capturing variables from outer scope
 
 - `do` - execute all the arguments in order, and return the value of the last one
