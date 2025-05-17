@@ -236,6 +236,12 @@ pub fn evaluateRuntime(
                         std.debug.print("`syscall` special form is being evaluated!\n", .{});
 
                         var args = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
+                        defer {
+                            for (args.items) |*arg| {
+                                arg.unref();
+                            }
+                            args.deinit();
+                        }
                         try args.append(list.contents.items[1].clone());
 
                         for (list.contents.items[2..]) |arg| {
@@ -449,6 +455,9 @@ fn executeSyscall(
                         }
                     }
                 }
+                return makeEmptyList(allocator);
+            } else if (std.mem.eql(u8, sym.contents.items, "add")) {
+                // TODO
                 return makeEmptyList(allocator);
             } else {
                 return RuntimeEvaluationError.UnknownSyscall;
