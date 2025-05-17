@@ -153,6 +153,8 @@ pub fn evaluateRuntime(
     runtime_ctx: utils.RefCount(RuntimeContext),
     allocator: std.mem.Allocator,
 ) !utils.RefCount(parser.LispieValue) {
+    std.debug.print("evaluateRuntime called!\n", .{});
+
     switch (value.*) {
         .list => |*list| {
             if (list.contents.items.len < 1) {
@@ -163,6 +165,8 @@ pub fn evaluateRuntime(
             switch (list.contents.items[0].value.*) {
                 .symbol => |*special_form_sym| {
                     if (std.mem.eql(u8, special_form_sym.contents.items, "let")) {
+                        std.debug.print("`let` special form is being evaluated!\n", .{});
+
                         var runtime_ctx_mut = runtime_ctx;
                         const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
                         inner_runtime_ctx_ptr.* = try .init(allocator);
@@ -193,6 +197,30 @@ pub fn evaluateRuntime(
                                 true,
                             )).?.* = binding_value_evaluated;
                         }
+
+                        return try evaluateRuntime(
+                            list.contents.items[list.contents.items.len - 1].value,
+                            module_ctx,
+                            inner_runtime_ctx_rc,
+                            allocator,
+                        );
+                    } else if (std.mem.eql(u8, special_form_sym.contents.items, "do")) {
+                        std.debug.print("`do` special form is being evaluated!\n", .{});
+
+                        for (0..(list.contents.items.len - 1)) |i| {
+                            var child_eval_result = try evaluateRuntime(
+                                list.contents.items[i + 1].value,
+                                module_ctx,
+                                runtime_ctx,
+                                allocator,
+                            );
+                            defer child_eval_result.unref();
+                            if (i == list.contents.items.len - 2) {
+                                return child_eval_result.clone();
+                            }
+                        }
+                    } else if (std.mem.eql(u8, special_form_sym.contents.items, "defmacro")) {
+                        return makeEmptyList(allocator);
                     }
                 },
                 else => {}
@@ -229,14 +257,7 @@ pub fn evaluateRuntime(
                 return binding_value_nonull;
             }
 
-            const result_ptr = try allocator.create(parser.LispieValue);
-            result_ptr.* = .{ .list = .{
-                .par_type = .normal,
-                .prefix = .none,
-                .contents = .init(allocator),
-            } };
-            const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
-            return result_rc;
+            return makeEmptyList(allocator);
         },
         else => {
             const result_ptr = try allocator.create(parser.LispieValue);
@@ -292,6 +313,17 @@ pub fn evaluate(
     return runtime_evaluation_result;
 }
 
+fn makeEmptyList(allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+    const result_ptr = try allocator.create(parser.LispieValue);
+    result_ptr.* = .{ .list = .{
+        .par_type = .normal,
+        .prefix = .none,
+        .contents = .init(allocator),
+    } };
+    const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+    return result_rc;
+}
+
 fn executeFunction(
     function: *parser.LispieValue,
     args: []utils.RefCount(parser.LispieValue),
@@ -299,6 +331,8 @@ fn executeFunction(
     runtime_ctx: utils.RefCount(RuntimeContext),
     allocator: std.mem.Allocator,
 ) (RuntimeEvaluationError || error{OutOfMemory})!utils.RefCount(parser.LispieValue) {
+    std.debug.print("Function call is being evaluated!\n", .{});
+
     // Check if the value passed as function really meets function-value requirements
     if (!switch (function.*) {
         .list => true,
