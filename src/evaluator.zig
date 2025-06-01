@@ -228,7 +228,7 @@ pub fn evaluateRuntime(
                             const binding_value_evaluated = try evaluateRuntime(
                                 list.contents.items[i + 1].value.list.contents.items[1].value,
                                 module_ctx,
-                                inner_runtime_ctx_rc,
+                                inner_runtime_ctx_rc.clone(),
                                 global_ctx,
                                 allocator,
                             );
