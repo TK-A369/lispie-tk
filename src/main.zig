@@ -21,9 +21,12 @@ pub fn main() !void {
         \\    print
         \\    "3 + 4 = "
         \\    (syscall
-        \\      add
-        \\      3
-        \\      4)))
+        \\      to-str 
+        \\      (syscall
+        \\        add
+        \\        3
+        \\        4))
+        \\    "\n"))
     ;
     try stdout.print("Code:\n\"\"\"\n{s}\n\"\"\"\n", .{code});
     try bw.flush();

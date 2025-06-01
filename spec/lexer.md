@@ -8,7 +8,7 @@ Token types:
   - prefix: none, quote `'`, quasiquote `\``, unquote `,`, macro expansion `!`
   - handedness: left `(`, right `)`
 
-2. Symbol - begins with a letter (lower- or uppercase); subsequent characters can be digits too
+2. Symbol - begins with a letter (lower- or uppercase); subsequent characters can be digits or hyphens too
 
 3. Number literal - optionally prefixed with `+` or `-`, then any number of digits, then optionally dot and digits
 

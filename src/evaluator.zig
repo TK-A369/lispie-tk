@@ -457,8 +457,42 @@ fn executeSyscall(
                 }
                 return makeEmptyList(allocator);
             } else if (std.mem.eql(u8, sym.contents.items, "add")) {
-                // TODO
-                return makeEmptyList(allocator);
+                var result: f64 = 0.0;
+
+                for (args[1..]) |arg| {
+                    switch (arg.value.*) {
+                        .number => |num| {
+                            result += num;
+                        },
+                        else => {
+                            //TODO: Decide whether to throw error on non-number inputs, or silently ignore (like now)
+                        }
+                    }
+                }
+
+                const result_ptr = try allocator.create(parser.LispieValue);
+                result_ptr.* = .{ .number = result };
+                const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+                return result_rc;
+            } else if (std.mem.eql(u8, sym.contents.items, "to-str")) {
+                var stringified = try args[1].value.toString(0, allocator);
+                defer stringified.deinit();
+
+                const result_ptr = try allocator.create(parser.LispieValue);
+                result_ptr.* = .{ .list = .{
+                    .par_type = .normal,
+                    .prefix = .none,
+                    .contents = .init(allocator),
+                } };
+                for (stringified.items) |ch| {
+                    const char_ptr = try allocator.create(parser.LispieValue);
+                    char_ptr.* = .{ .number = @floatFromInt(ch) };
+                    const char_rc = try utils.RefCount(parser.LispieValue).init(char_ptr, allocator);
+
+                    try result_ptr.list.contents.append(char_rc);
+                }
+                const result_rc = try utils.RefCount(parser.LispieValue).init(result_ptr, allocator);
+                return result_rc;
             } else {
                 return RuntimeEvaluationError.UnknownSyscall;
             }

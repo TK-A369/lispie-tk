@@ -149,7 +149,7 @@ pub fn tokenize(code: []const u8, allocator: std.mem.Allocator) !std.ArrayList(T
             prev_prefix_char = 0;
 
             var symbol_str = std.ArrayList(u8).init(allocator);
-            while (std.ascii.isAlphabetic(code[curr_idx])) {
+            while (std.ascii.isAlphanumeric(code[curr_idx]) or utils.isValueInArray(u8, &[_]u8{'-'}, code[curr_idx])) {
                 try symbol_str.append(code[curr_idx]);
                 curr_idx += 1;
             }
