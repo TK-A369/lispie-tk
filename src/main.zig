@@ -14,20 +14,7 @@ pub fn main() !void {
     const allocator = da.allocator();
     defer _ = da.deinit();
 
-    const code =
-        \\(do
-        \\  (defmacro mymacro [f a b] `(do (,f ,a) (,f ,b)))
-        \\  (syscall
-        \\    print
-        \\    "3 + 4 = "
-        \\    (syscall
-        \\      to-str 
-        \\      (syscall
-        \\        add
-        \\        3
-        \\        4))
-        \\    "\n"))
-    ;
+    const code = @embedFile("examples/print-addition.lisp");
     try stdout.print("Code:\n\"\"\"\n{s}\n\"\"\"\n", .{code});
     try bw.flush();
     const tokens = try lexer.tokenize(code, allocator);
