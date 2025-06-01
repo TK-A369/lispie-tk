@@ -14,6 +14,8 @@ pub fn RefCount(comptime T: type) type {
         const Atomic = std.atomic.Value(usize);
         const This = @This();
 
+        const ref_count_debug = false;
+
         count: *Atomic,
         value: *T,
         allocator: std.mem.Allocator,
@@ -43,11 +45,15 @@ pub fn RefCount(comptime T: type) type {
 
                 if (std.meta.hasMethod(T, "deinit")) {
                     self.value.deinit();
-                    std.debug.print("Deiniting value inside RefCount\n", .{});
+                    if (ref_count_debug) {
+                        std.debug.print("Deiniting value inside RefCount\n", .{});
+                    }
                 }
 
-                std.debug.print("Destroying {*}\n", .{self.value});
-                // std.debug.print("Destroying RefCount\n", .{});
+                if (ref_count_debug) {
+                    std.debug.print("Destroying {*}\n", .{self.value});
+                    // std.debug.print("Destroying RefCount\n", .{});
+                }
 
                 self.allocator.destroy(self.count);
                 self.allocator.destroy(self.value);
@@ -89,6 +95,8 @@ test "RefCount 2" {
 pub fn Trie(comptime T: type) type {
     return struct {
         const This = @This();
+
+        const trie_debug = false;
 
         pub const Node = struct {
             children: [256]?*Node,
@@ -191,11 +199,15 @@ pub fn Trie(comptime T: type) type {
             if (node.element) |element_nonull| {
                 if (std.meta.hasMethod(T, "unref")) {
                     element_nonull.unref();
-                    std.debug.print("Unrefing value inside Trie\n", .{});
+                    if (trie_debug) {
+                        std.debug.print("Unrefing value inside Trie\n", .{});
+                    }
                 }
                 if (std.meta.hasMethod(T, "deinit")) {
                     element_nonull.deinit();
-                    std.debug.print("Deiniting value inside Trie\n", .{});
+                    if (trie_debug) {
+                        std.debug.print("Deiniting value inside Trie\n", .{});
+                    }
                 }
                 self.allocator.destroy(element_nonull);
             }

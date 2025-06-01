@@ -3,6 +3,10 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const parser = @import("parser.zig");
 
+pub const GlobalContext = struct {
+    debug_prints: bool,
+};
+
 pub const ModuleContext = struct {
     const MacrosTrie = utils.Trie(MacroDef);
     const MacroDef = struct {
@@ -75,7 +79,12 @@ pub const RuntimeEvaluationError = error{
     UnknownSyscall,
 };
 
-pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext, allocator: std.mem.Allocator) !utils.RefCount(parser.LispieValue) {
+pub fn evaluateReadMacros(
+    value: *parser.LispieValue,
+    module_ctx: *ModuleContext,
+    global_ctx: *GlobalContext,
+    allocator: std.mem.Allocator,
+) !utils.RefCount(parser.LispieValue) {
     switch (value.*) {
         .list => |*list| {
             match_defmacro: {
@@ -100,14 +109,16 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
                     },
                 };
 
-                std.debug.print("Macro {s} defined\n", .{macro_name_sym.contents.items});
+                if (global_ctx.debug_prints) {
+                    std.debug.print("Macro {s} defined\n", .{macro_name_sym.contents.items});
+                }
 
                 (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.args = list.contents.items[2].clone();
                 (try module_ctx.macros.get(macro_name_sym.contents.items, true)).?.body = list.contents.items[3].clone();
             }
             var children_results = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
             for (list.contents.items) |*child| {
-                const child_result = try evaluateReadMacros(child.value, module_ctx, allocator);
+                const child_result = try evaluateReadMacros(child.value, module_ctx, global_ctx, allocator);
                 try children_results.append(child_result);
             }
 
@@ -132,9 +143,11 @@ pub fn evaluateReadMacros(value: *parser.LispieValue, module_ctx: *ModuleContext
 pub fn evaluateExpandMacros(
     value: *parser.LispieValue,
     module_ctx: *ModuleContext,
+    global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
 ) !utils.RefCount(parser.LispieValue) {
     _ = module_ctx;
+    _ = global_ctx;
 
     switch (value.*) {
         // .list => |*list| {
@@ -153,15 +166,23 @@ pub fn evaluateRuntime(
     value: *parser.LispieValue,
     module_ctx: *ModuleContext,
     runtime_ctx: utils.RefCount(RuntimeContext),
+    global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
 ) !utils.RefCount(parser.LispieValue) {
-    std.debug.print("evaluateRuntime called!\n", .{});
+    var runtime_ctx_mut = runtime_ctx;
+    defer runtime_ctx_mut.unref();
+
+    if (global_ctx.debug_prints) {
+        std.debug.print("evaluateRuntime called!\n", .{});
+    }
 
     switch (value.*) {
         .list => |*list| {
             // Quotelists will remain unchanged, only the quote prefix will be removed
             if (list.prefix == .quote) {
-                std.debug.print("Quotelist is being evaluated!\n", .{});
+                if (global_ctx.debug_prints) {
+                    std.debug.print("Quotelist is being evaluated!\n", .{});
+                }
 
                 const result_ptr = try allocator.create(parser.LispieValue);
                 result_ptr.* = try value.clone(allocator);
@@ -178,14 +199,14 @@ pub fn evaluateRuntime(
             switch (list.contents.items[0].value.*) {
                 .symbol => |*special_form_sym| {
                     if (std.mem.eql(u8, special_form_sym.contents.items, "let")) {
-                        std.debug.print("`let` special form is being evaluated!\n", .{});
+                        if (global_ctx.debug_prints) {
+                            std.debug.print("`let` special form is being evaluated!\n", .{});
+                        }
 
-                        var runtime_ctx_mut = runtime_ctx;
                         const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
                         inner_runtime_ctx_ptr.* = try .init(allocator);
                         inner_runtime_ctx_ptr.outer_ctx = runtime_ctx_mut.clone();
                         var inner_runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(inner_runtime_ctx_ptr, allocator);
-                        defer inner_runtime_ctx_rc.unref();
 
                         for (0..(list.contents.items.len - 2)) |i| {
                             // Check if binding definition is correct
@@ -203,7 +224,13 @@ pub fn evaluateRuntime(
                                 }
                             }
 
-                            const binding_value_evaluated = try evaluateRuntime(list.contents.items[i + 1].value.list.contents.items[1].value, module_ctx, inner_runtime_ctx_rc, allocator);
+                            const binding_value_evaluated = try evaluateRuntime(
+                                list.contents.items[i + 1].value.list.contents.items[1].value,
+                                module_ctx,
+                                inner_runtime_ctx_rc,
+                                global_ctx,
+                                allocator,
+                            );
 
                             (try inner_runtime_ctx_rc.value.bindings.get(
                                 list.contents.items[i + 1].value.list.contents.items[0].value.symbol.contents.items,
@@ -215,16 +242,20 @@ pub fn evaluateRuntime(
                             list.contents.items[list.contents.items.len - 1].value,
                             module_ctx,
                             inner_runtime_ctx_rc,
+                            global_ctx,
                             allocator,
                         );
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "do")) {
-                        std.debug.print("`do` special form is being evaluated!\n", .{});
+                        if (global_ctx.debug_prints) {
+                            std.debug.print("`do` special form is being evaluated!\n", .{});
+                        }
 
                         for (0..(list.contents.items.len - 1)) |i| {
                             var child_eval_result = try evaluateRuntime(
                                 list.contents.items[i + 1].value,
                                 module_ctx,
-                                runtime_ctx,
+                                runtime_ctx_mut.clone(),
+                                global_ctx,
                                 allocator,
                             );
                             defer child_eval_result.unref();
@@ -233,7 +264,9 @@ pub fn evaluateRuntime(
                             }
                         }
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "syscall")) {
-                        std.debug.print("`syscall` special form is being evaluated!\n", .{});
+                        if (global_ctx.debug_prints) {
+                            std.debug.print("`syscall` special form is being evaluated!\n", .{});
+                        }
 
                         var args = std.ArrayList(utils.RefCount(parser.LispieValue)).init(allocator);
                         defer {
@@ -245,11 +278,17 @@ pub fn evaluateRuntime(
                         try args.append(list.contents.items[1].clone());
 
                         for (list.contents.items[2..]) |arg| {
-                            try args.append(try evaluateRuntime(arg.value, module_ctx, runtime_ctx, allocator));
+                            try args.append(try evaluateRuntime(
+                                arg.value,
+                                module_ctx,
+                                runtime_ctx_mut.clone(),
+                                global_ctx,
+                                allocator,
+                            ));
                         }
 
                         // return makeEmptyList(allocator);
-                        return executeSyscall(args.items, allocator);
+                        return executeSyscall(args.items, global_ctx, allocator);
                     } else if (std.mem.eql(u8, special_form_sym.contents.items, "defmacro")) {
                         return makeEmptyList(allocator);
                     }
@@ -260,7 +299,8 @@ pub fn evaluateRuntime(
             var function_evaluated = try evaluateRuntime(
                 list.contents.items[0].value,
                 module_ctx,
-                runtime_ctx,
+                runtime_ctx_mut.clone(),
+                global_ctx,
                 allocator,
             );
             defer function_evaluated.unref();
@@ -270,7 +310,8 @@ pub fn evaluateRuntime(
                 try args_evaluated.append(try evaluateRuntime(
                     list.contents.items[i].value,
                     module_ctx,
-                    runtime_ctx,
+                    runtime_ctx_mut.clone(),
+                    global_ctx,
                     allocator,
                 ));
             }
@@ -280,7 +321,14 @@ pub fn evaluateRuntime(
                 }
             }
 
-            return try executeFunction(function_evaluated.value, args_evaluated.items, module_ctx, runtime_ctx, allocator);
+            return try executeFunction(
+                function_evaluated.value,
+                args_evaluated.items,
+                module_ctx,
+                runtime_ctx_mut.clone(),
+                global_ctx,
+                allocator,
+            );
         },
         .symbol => |*sym| {
             const binding_value = try runtime_ctx.value.get_binding(sym.contents.items);
@@ -302,22 +350,27 @@ pub fn evaluateRuntime(
 pub fn evaluate(
     value: *parser.LispieValue,
     module_ctx: *ModuleContext,
+    global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
-    debug_prints: bool,
 ) !utils.RefCount(parser.LispieValue) {
-    var macro_read_result = try evaluateReadMacros(value, module_ctx, allocator);
+    var macro_read_result = try evaluateReadMacros(value, module_ctx, global_ctx, allocator);
     defer macro_read_result.unref();
 
-    if (debug_prints) {
+    if (global_ctx.debug_prints) {
         var macro_read_result_str = try macro_read_result.value.toString(0, allocator);
         defer macro_read_result_str.deinit();
         std.debug.print("Macro read result:\n{s}\n", .{macro_read_result_str.items});
     }
 
-    var macro_expand_result = try evaluateExpandMacros(macro_read_result.value, module_ctx, allocator);
+    var macro_expand_result = try evaluateExpandMacros(
+        macro_read_result.value,
+        module_ctx,
+        global_ctx,
+        allocator,
+    );
     defer macro_expand_result.unref();
 
-    if (debug_prints) {
+    if (global_ctx.debug_prints) {
         var macro_expand_result_str = try macro_expand_result.value.toString(0, allocator);
         defer macro_expand_result_str.deinit();
         std.debug.print("Macro expand result:\n{s}\n", .{macro_expand_result_str.items});
@@ -325,17 +378,17 @@ pub fn evaluate(
 
     const runtime_ctx_ptr = try allocator.create(RuntimeContext);
     runtime_ctx_ptr.* = try .init(allocator);
-    var runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(runtime_ctx_ptr, allocator);
-    defer runtime_ctx_rc.unref();
+    const runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(runtime_ctx_ptr, allocator);
 
     const runtime_evaluation_result = try evaluateRuntime(
         macro_expand_result.value,
         module_ctx,
         runtime_ctx_rc,
+        global_ctx,
         allocator,
     );
 
-    if (debug_prints) {
+    if (global_ctx.debug_prints) {
         var eval_result_str = try runtime_evaluation_result.value.toString(0, allocator);
         defer eval_result_str.deinit();
         std.debug.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
@@ -360,9 +413,15 @@ fn executeFunction(
     args: []utils.RefCount(parser.LispieValue),
     module_ctx: *ModuleContext,
     runtime_ctx: utils.RefCount(RuntimeContext),
+    global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
 ) (RuntimeEvaluationError || error{OutOfMemory})!utils.RefCount(parser.LispieValue) {
-    std.debug.print("Function call is being evaluated!\n", .{});
+    var runtime_ctx_mut = runtime_ctx;
+    defer runtime_ctx_mut.unref();
+
+    if (global_ctx.debug_prints) {
+        std.debug.print("Function call is being evaluated!\n", .{});
+    }
 
     // Check if the value passed as function really meets function-value requirements
     if (!switch (function.*) {
@@ -376,12 +435,10 @@ fn executeFunction(
     }
 
     // Create new scope
-    var runtime_ctx_mut = runtime_ctx;
     const inner_runtime_ctx_ptr = try allocator.create(RuntimeContext);
     inner_runtime_ctx_ptr.* = try .init(allocator);
     inner_runtime_ctx_ptr.outer_ctx = runtime_ctx_mut.clone();
     var inner_runtime_ctx_rc = try utils.RefCount(RuntimeContext).init(inner_runtime_ctx_ptr, allocator);
-    defer inner_runtime_ctx_rc.unref();
 
     var args_def = function.list.contents.items[1].clone();
     defer args_def.unref();
@@ -418,11 +475,18 @@ fn executeFunction(
     var function_body = function.list.contents.items[2].clone();
     defer function_body.unref();
 
-    return try evaluateRuntime(function_body.value, module_ctx, inner_runtime_ctx_rc, allocator);
+    return try evaluateRuntime(
+        function_body.value,
+        module_ctx,
+        inner_runtime_ctx_rc,
+        global_ctx,
+        allocator,
+    );
 }
 
 fn executeSyscall(
     args: []utils.RefCount(parser.LispieValue),
+    global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
 ) !utils.RefCount(parser.LispieValue) {
     if (args.len < 1) {
@@ -438,7 +502,9 @@ fn executeSyscall(
                                 switch (str_char.value.*) {
                                     .number => |*str_char_code| {
                                         //TODO: Use stdout instead of stderr
-                                        std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                                        if (global_ctx.debug_prints) {
+                                            std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                                        }
                                     },
                                     else => {
                                         return RuntimeEvaluationError.MalformedSyscall;
@@ -448,7 +514,9 @@ fn executeSyscall(
                         },
                         .number => |*str_char_code| {
                             //TODO: Use stdout instead of stderr
-                            std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                            if (global_ctx.debug_prints) {
+                                std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
+                            }
                         },
                         else => {
                             return RuntimeEvaluationError.MalformedSyscall;

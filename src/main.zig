@@ -44,14 +44,17 @@ pub fn main() !void {
 
     var module_ctx = try evaluator.ModuleContext.init(allocator);
     defer module_ctx.deinit();
+    var global_ctx = evaluator.GlobalContext{
+        .debug_prints = true,
+    };
 
     // var macro_read_result = try evaluator.evaluateReadMacros(parse_result.val.value, &module_ctx, allocator);
     // defer macro_read_result.unref();
     var eval_result = try evaluator.evaluate(
         parse_result.val.value,
         &module_ctx,
+        &global_ctx,
         allocator,
-        true,
     );
     defer eval_result.unref();
     try bw.flush();
