@@ -24,13 +24,13 @@ pub fn main() !void {
             tok.deinit();
         }
     }
-    try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
+    // try stdout.print("Tokens count: {d}\n", .{tokens.items.len});
     try bw.flush();
 
     for (tokens.items) |tok| {
         var token_str = try tok.toString(allocator);
         defer token_str.deinit();
-        try stdout.print("Token: {s}\n", .{token_str.items});
+        // try stdout.print("Token: {s}\n", .{token_str.items});
     }
     try bw.flush();
 
@@ -45,7 +45,8 @@ pub fn main() !void {
     var module_ctx = try evaluator.ModuleContext.init(allocator);
     defer module_ctx.deinit();
     var global_ctx = evaluator.GlobalContext{
-        .debug_prints = true,
+        .debug_prints = false,
+        .print_result = true,
     };
 
     // var macro_read_result = try evaluator.evaluateReadMacros(parse_result.val.value, &module_ctx, allocator);

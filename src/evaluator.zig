@@ -5,6 +5,7 @@ const parser = @import("parser.zig");
 
 pub const GlobalContext = struct {
     debug_prints: bool,
+    print_result: bool,
 };
 
 pub const ModuleContext = struct {
@@ -388,7 +389,7 @@ pub fn evaluate(
         allocator,
     );
 
-    if (global_ctx.debug_prints) {
+    if (global_ctx.print_result) {
         var eval_result_str = try runtime_evaluation_result.value.toString(0, allocator);
         defer eval_result_str.deinit();
         std.debug.print("Evaluation result:\n{s}\n", .{eval_result_str.items});
