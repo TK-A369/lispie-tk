@@ -490,6 +490,8 @@ fn executeSyscall(
     global_ctx: *GlobalContext,
     allocator: std.mem.Allocator,
 ) !utils.RefCount(parser.LispieValue) {
+    _ = global_ctx;
+
     if (args.len < 1) {
         return RuntimeEvaluationError.MalformedSyscall;
     }
@@ -503,9 +505,7 @@ fn executeSyscall(
                                 switch (str_char.value.*) {
                                     .number => |*str_char_code| {
                                         //TODO: Use stdout instead of stderr
-                                        if (global_ctx.debug_prints) {
-                                            std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
-                                        }
+                                        std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
                                     },
                                     else => {
                                         return RuntimeEvaluationError.MalformedSyscall;
@@ -515,9 +515,7 @@ fn executeSyscall(
                         },
                         .number => |*str_char_code| {
                             //TODO: Use stdout instead of stderr
-                            if (global_ctx.debug_prints) {
-                                std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
-                            }
+                            std.debug.print("{c}", .{@as(u8, @intFromFloat(str_char_code.*))});
                         },
                         else => {
                             return RuntimeEvaluationError.MalformedSyscall;

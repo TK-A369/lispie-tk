@@ -14,7 +14,31 @@ pub fn main() !void {
     const allocator = da.allocator();
     defer _ = da.deinit();
 
-    const code = @embedFile("examples/print-addition.lisp");
+    var args_iter = try std.process.argsWithAllocator(allocator);
+    defer args_iter.deinit();
+    var args = std.ArrayList([:0]const u8).init(allocator);
+    defer args.deinit();
+    while (args_iter.next()) |arg| {
+        try args.append(arg);
+    }
+    for (args.items) |arg| {
+        try stdout.print("Arg: {s}\n", .{arg});
+    }
+
+    if (args.items.len != 2) {
+        try stdout.print("Usage: tk-lispie [input file]", .{});
+        try bw.flush();
+        return;
+    }
+    var input_file = try std.fs.cwd().openFileZ(
+        args.items[1],
+        .{ .mode = .read_only },
+    );
+    defer input_file.close();
+
+    // const code = @embedFile("examples/print-addition.lisp");
+    const code = try input_file.readToEndAlloc(allocator, 1000000);
+    defer allocator.free(code);
     try stdout.print("Code:\n\"\"\"\n{s}\n\"\"\"\n", .{code});
     try bw.flush();
     const tokens = try lexer.tokenize(code, allocator);
